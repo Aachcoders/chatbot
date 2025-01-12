@@ -1,0 +1,66 @@
+{
+    "intents": [
+        {
+            "tag": "greeting",
+            "patterns": [
+                "Hi",
+                "Hey",
+                "Hello",
+                "Good morning",
+                "Good evening",
+                "Hi there",
+                "Hello there",
+                "What's up"
+            ],
+            "responses": [
+                "Hello! How can I help you today?",
+                "Hi there! What can I do for you?",
+                "Hello! Looking for something specific?"
+            ]
+        },
+        {
+            "tag": "product_search",
+            "patterns": [
+                "I'm looking for",
+                "Do you have",
+                "Can I find",
+                "Where can I find",
+                "I want to buy",
+                "I need to purchase"
+            ],
+            "responses": [
+                "Let me search for that...",
+                "I'll help you find what you're looking for.",
+                "Let me check our inventory."
+            ]
+        },
+        {
+            "tag": "order_status",
+            "patterns": [
+                "Where is my order",
+                "Track my order",
+                "Order status",
+                "When will my order arrive"
+            ],
+            "responses": [
+                "Let me check your order status...",
+                "I'll look up your order right away.",
+                "Let me track that for you."
+            ]
+        },
+        {
+            "tag": "recommendations",
+            "patterns": [
+                "What do you recommend",
+                "What's popular",
+                "What should I buy",
+                "Best products"
+            ],
+            "responses": [
+                "Here are some recommendations based on your preferences...",
+                "I think you might like these items...",
+                "Here are our top picks for you..."
+            ]
+        }
+    ]
+}

@@ -1,0 +1,21 @@
+UserID,UserName,Email,PhoneNumber,Address,RegisteredDate,LastActiveDate,Age,Gender,PreferredPaymentMethod,LoyaltyPoints,AccountStatus
+U001,User_1,user1@example.com,1524018963,"697 Main St, City 1",01-01-2020,01-01-2025,56,Other,Debit Card,292,Inactive
+U002,User_2,user2@example.com,7558355096,"338 Main St, City 2",02-01-2020,02-01-2025,38,Male,Credit Card,368,Suspended
+U003,User_3,user3@example.com,5717476323,"885 Main St, City 3",03-01-2020,03-01-2025,48,Other,Net Banking,430,Active
+U004,User_4,user4@example.com,5938566854,"854 Main St, City 4",04-01-2020,04-01-2025,18,Male,UPI,172,Inactive
+U005,User_5,user5@example.com,8944996321,"347 Main St, City 5",05-01-2020,05-01-2025,56,Other,UPI,262,Inactive
+U006,User_6,user6@example.com,6454048832,"992 Main St, City 6",06-01-2020,06-01-2025,39,Female,UPI,384,Inactive
+U007,User_7,user7@example.com,7169495401,"700 Main St, City 7",07-01-2020,07-01-2025,32,Male,UPI,438,Inactive
+U008,User_8,user8@example.com,1676744800,"889 Main St, City 8",08-01-2020,08-01-2025,47,Other,Net Banking,214,Active
+U009,User_9,user9@example.com,2606373308,"219 Main St, City 9",09-01-2020,09-01-2025,49,Other,Net Banking,82,Active
+U010,User_10,user10@example.com,6197096417,"237 Main St, City 10",10-01-2020,10-01-2025,33,Female,Net Banking,3,Suspended
+U011,User_11,user11@example.com,1447962849,"810 Main St, City 11",11-01-2020,11-01-2025,27,Female,Credit Card,339,Suspended
+U012,User_12,user12@example.com,7852427106,"286 Main St, City 12",12-01-2020,12-01-2025,42,Male,Credit Card,97,Suspended
+U013,User_13,user13@example.com,7699958400,"756 Main St, City 13",13-01-2020,13-01-2025,29,Male,Debit Card,388,Inactive
+U014,User_14,user14@example.com,7414860358,"680 Main St, City 14",14-01-2020,14-01-2025,41,Other,Net Banking,108,Active
+U015,User_15,user15@example.com,2507927653,"234 Main St, City 15",15-01-2020,15-01-2025,33,Female,Net Banking,163,Inactive
+U016,User_16,user16@example.com,1648006683,"855 Main St, City 16",16-01-2020,16-01-2025,40,Male,Debit Card,63,Inactive
+U017,User_17,user17@example.com,9419836668,"184 Main St, City 17",17-01-2020,17-01-2025,50,Female,UPI,59,Suspended
+U018,User_18,user18@example.com,8444827155,"202 Main St, City 18",18-01-2020,18-01-2025,51,Female,Net Banking,317,Suspended
+U019,User_19,user19@example.com,2043058635,"669 Main St, City 19",19-01-2020,19-01-2025,43,Male,Credit Card,86,Suspended
+U020,User_20,user20@example.com,5072828382,"800 Main St, City 20",20-01-2020,20-01-2025,28,Male,UPI,81,Active

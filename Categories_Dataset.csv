@@ -1,0 +1,21 @@
+CategoryID,CategoryName,Description,ParentCategory,IsActive,CreatedDate,LastUpdated
+C001,Fruits,Fresh and organic fruits,,Inactive,01-01-2020,01-01-2025
+C002,Vegetables,Healthy and fresh vegetables,,Inactive,02-01-2020,02-01-2025
+C003,Dairy,Milk and dairy products,Food & Beverage,Inactive,03-01-2020,03-01-2025
+C004,Grains,Grains and pulses for everyday use,Food & Beverage,Inactive,04-01-2020,04-01-2025
+C005,Apparel,Fashionable and trendy apparel,,Active,05-01-2020,05-01-2025
+C006,Electronics,Latest electronic gadgets,,Inactive,06-01-2020,06-01-2025
+C007,Furniture,High-quality furniture,,Inactive,07-01-2020,07-01-2025
+C008,Books,Books across genres and topics,Media,Active,08-01-2020,08-01-2025
+C009,Toys,Toys for kids of all ages,Kids,Active,09-01-2020,09-01-2025
+C010,Sports,Sports equipment and gear,Fitness,Active,10-01-2020,10-01-2025
+C011,Beauty Products,Cosmetics and beauty products,Personal Care,Active,11-01-2020,11-01-2025
+C012,Automotive,Automobile accessories,Automobiles,Inactive,12-01-2020,12-01-2025
+C013,Jewelry,Elegant and exquisite jewelry,Luxury,Active,13-01-2020,13-01-2025
+C014,Garden Supplies,Supplies for gardening enthusiasts,Outdoor,Active,14-01-2020,14-01-2025
+C015,Pet Supplies,Supplies for your pets,Pets,Inactive,15-01-2020,15-01-2025
+C016,Stationery,Office and school stationery,Office Supplies,Inactive,16-01-2020,16-01-2025
+C017,Music Instruments,Instruments for music lovers,Entertainment,Active,17-01-2020,17-01-2025
+C018,Gaming,Gaming consoles and accessories,Entertainment,Active,18-01-2020,18-01-2025
+C019,Healthcare,Healthcare products and equipment,Healthcare,Active,19-01-2020,19-01-2025
+C020,Home Appliances,Essential home appliances,Household,Active,20-01-2020,20-01-2025
