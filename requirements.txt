@@ -1,5 +1,6 @@
 torch
-groq
+langchain 
+langchain_openai
 pandas
 numpy
 transformers
