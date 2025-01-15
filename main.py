@@ -93,7 +93,7 @@ class EcommerceAssistant:
             model_name="gpt-3.5-turbo",
             temperature=0.7,
             streaming=True
-        )
+            openai_api_key=api_key
         
         # Set up conversation memory
         self.memory = ConversationBufferMemory(
