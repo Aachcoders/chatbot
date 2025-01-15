@@ -1,18 +1,16 @@
 import streamlit as st
 import pandas as pd
+import torch
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from dataclasses import dataclass
 import logging
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
-from langchain.memory import ConversationBufferMemory
-from langchain.callbacks import StreamlitCallbackHandler
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
 import os
 from dotenv import load_dotenv
+
+# Transformers imports
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+import torch.nn.functional as F
 
 # Load environment variables
 load_dotenv()
@@ -20,13 +18,6 @@ load_dotenv()
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-def get_openai_api_key():
-    """Get OpenAI API key from environment variable or Streamlit secrets"""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key and hasattr(st.secrets, "OPENAI_API_KEY"):
-        api_key = st.secrets.OPENAI_API_KEY
-    return api_key
-    
 
 @dataclass
 class OrderInfo:
@@ -39,44 +30,13 @@ class OrderInfo:
 
 class ProductSearchEngine:
     def __init__(self, products_df: pd.DataFrame):
-        """Initialize search engine with product embeddings"""
+        """Initialize search engine with text-based matching"""
         self.products_df = products_df
-        self.embeddings = OpenAIEmbeddings()
-        self.setup_vector_store()
         
-    def setup_vector_store(self):
-        """Create FAISS vector store for semantic search"""
-        try:
-            # Combine product information for better semantic search
-            texts = [
-                f"{row['ProductName']} {row['Description']} {row['Category']}"
-                for _, row in self.products_df.iterrows()
-            ]
-            
-            # Create FAISS index
-            self.vector_store = FAISS.from_texts(
-                texts,
-                self.embeddings,
-                metadatas=[{"id": i} for i in range(len(texts))]
-            )
-            logger.info("Vector store created successfully")
-        except Exception as e:
-            logger.error(f"Error creating vector store: {str(e)}")
-            raise
-    
     def search_products(self, query: str, top_k: int = 5) -> pd.DataFrame:
-        """Search products using semantic search"""
-        try:
-            results = self.vector_store.similarity_search_with_score(query, k=top_k)
-            product_indices = [doc.metadata["id"] for doc, _ in results]
-            return self.products_df.iloc[product_indices]
-        except Exception as e:
-            logger.error(f"Error in semantic search: {str(e)}")
-            return self._keyword_search(query, top_k)
-    
-    def _keyword_search(self, query: str, top_k: int = 5) -> pd.DataFrame:
-        """Fallback keyword-based search"""
+        """Search products using keyword matching"""
         query = query.lower()
+        # Score products based on keyword matches
         scores = self.products_df.apply(
             lambda row: sum(
                 q in str(row['ProductName']).lower() or 
@@ -95,97 +55,38 @@ class EcommerceAssistant:
         self.users_df = users_df
         self.search_engine = ProductSearchEngine(products_df)
         
-        # Initialize ChatGPT model
-        self.llm = ChatOpenAI(
-            model_name="gpt-3.5-turbo",
-            temperature=0.7,
-            streaming=True
-            openai_api_key=api_key
+        # Initialize GPT-2 model
+        self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+        self.model = GPT2LMHeadModel.from_pretrained('gpt2')
         
-        # Set up conversation memory
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
-        
-        # Initialize prompt templates
-        self.templates = {
-            'product_search': ChatPromptTemplate.from_template("""
-                You are a knowledgeable e-commerce assistant. Based on the following products:
-                {products}
-                
-                And the user's search query: {query}
-                
-                Provide a helpful response that:
-                1. Highlights the most relevant products
-                2. Explains why each product matches their needs
-                3. Mentions key features and pricing
-                4. Suggests alternatives if relevant
-                
-                Keep the tone friendly and conversational.
-            """),
-            
-            'order_status': ChatPromptTemplate.from_template("""
-                You are a helpful customer service agent. For the following order:
-                {order_details}
-                
-                Provide a friendly status update that includes:
-                1. Current order status
-                2. Expected delivery date
-                3. Tracking information if available
-                4. Next steps or recommendations
-                
-                Keep the tone positive and helpful.
-            """),
-            
-            'recommendations': ChatPromptTemplate.from_template("""
-                You are a personalized shopping assistant. Based on:
-                
-                Purchase History:
-                {purchase_history}
-                
-                Recommended Products:
-                {recommendations}
-                
-                Provide personalized recommendations that:
-                1. Explain why each product was chosen
-                2. Connect it to their past purchases
-                3. Highlight key features and benefits
-                4. Include pricing information
-                
-                Keep the tone engaging and personalized.
-            """)
-        }
-        
-        # Initialize chains
-        self.chains = {
-            'product_search': LLMChain(
-                llm=self.llm,
-                prompt=self.templates['product_search'],
-                memory=self.memory
-            ),
-            'order_status': LLMChain(
-                llm=self.llm,
-                prompt=self.templates['order_status'],
-                memory=self.memory
-            ),
-            'recommendations': LLMChain(
-                llm=self.llm,
-                prompt=self.templates['recommendations'],
-                memory=self.memory
-            )
-        }
+        # Add padding token if not exists
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
-    def format_product_info(self, products_df: pd.DataFrame) -> str:
-        """Format product information for LLM prompts"""
-        product_info = []
-        for _, product in products_df.iterrows():
-            info = (f"Product: {product['ProductName']}\n"
-                   f"Price: ${product['Price']:.2f}\n"
-                   f"Category: {product.get('Category', 'N/A')}\n"
-                   f"Description: {product['Description']}\n")
-            product_info.append(info)
-        return "\n".join(product_info)
+    def generate_response(self, prompt: str, max_length: int = 200) -> str:
+        """Generate response using GPT-2"""
+        try:
+            # Encode the input
+            input_ids = self.tokenizer.encode(prompt, return_tensors='pt')
+            
+            # Generate response
+            output = self.model.generate(
+                input_ids, 
+                max_length=max_length,
+                num_return_sequences=1,
+                no_repeat_ngram_size=2,
+                top_k=50,
+                top_p=0.95,
+                temperature=0.7
+            )
+            
+            # Decode the response
+            response = self.tokenizer.decode(output[0], skip_special_tokens=True)
+            
+            return response
+        except Exception as e:
+            logger.error(f"Error generating response: {str(e)}")
+            return "I'm having trouble processing your request. Could you please rephrase?"
 
     def get_order_status(self, user_id: str) -> Optional[OrderInfo]:
         """Get latest order status for user"""
@@ -229,47 +130,43 @@ class EcommerceAssistant:
         
         return recommended_products
 
-    async def process_message(self, message: str, user_id: str = None) -> str:
+    def process_message(self, message: str, user_id: str = None) -> str:
         """Process user message and generate response"""
         try:
-            st_callback = StreamlitCallbackHandler(st.container())
-            
             # Process different types of queries
             if any(word in message.lower() for word in ['search', 'find', 'looking', 'show']):
                 products = self.search_engine.search_products(message)
-                response = await self.chains['product_search'].arun(
-                    products=self.format_product_info(products),
-                    query=message,
-                    callbacks=[st_callback]
-                )
+                prompt = f"User is looking for products. Here are some relevant products:\n"
+                for _, product in products.iterrows():
+                    prompt += f"- {product['ProductName']} (${product['Price']}): {product['Description']}\n"
+                prompt += "\nHelp the user by explaining these products and their benefits."
                 
             elif user_id and any(word in message.lower() for word in ['order', 'status', 'tracking']):
                 order_info = self.get_order_status(user_id)
                 if not order_info:
                     return "I couldn't find any orders for your account. Would you like to start shopping?"
-                response = await self.chains['order_status'].arun(
-                    order_details=str(order_info.__dict__),
-                    callbacks=[st_callback]
-                )
+                
+                prompt = f"Order Status:\n"
+                prompt += f"Order ID: {order_info.order_id}\n"
+                prompt += f"Product: {order_info.product_name}\n"
+                prompt += f"Status: {order_info.status}\n"
+                prompt += f"Order Date: {order_info.order_date}\n"
+                prompt += f"Expected Delivery: {order_info.delivery_date}\n"
+                prompt += "Provide a helpful customer service response."
                 
             elif user_id and any(word in message.lower() for word in ['recommend', 'suggestion']):
                 recommendations = self.get_user_recommendations(user_id)
-                response = await self.chains['recommendations'].arun(
-                    purchase_history=self.format_product_info(
-                        self.products_df[self.products_df['ProductID'].isin(
-                            self.orders_df[self.orders_df['UserID'] == user_id]['ProductID']
-                        )]
-                    ),
-                    recommendations=self.format_product_info(recommendations),
-                    callbacks=[st_callback]
-                )
+                prompt = "Personalized Product Recommendations:\n"
+                for _, product in recommendations.iterrows():
+                    prompt += f"- {product['ProductName']} (${product['Price']}): {product['Description']}\n"
+                prompt += "\nExplain why these products might interest the user based on their purchase history."
+            
             else:
                 # General conversation
-                response = await self.llm.apredict(
-                    message,
-                    callbacks=[st_callback]
-                )
+                prompt = message
             
+            # Generate response using GPT-2
+            response = self.generate_response(prompt)
             return response
                 
         except Exception as e:
@@ -289,7 +186,7 @@ def initialize_app():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
     if 'user_id' not in st.session_state:
-        st.session_state.user_id = None
+        st.session_state .user_id = None
     
     try:
         products_df = pd.read_csv("Updated_Products_Dataset.csv")
@@ -320,7 +217,7 @@ async def main():
         if not st.session_state.logged_in:
             user_id = st.text_input("Enter User ID")
             if st.button("Login"):
-                if user_id in st.session_state.assistant.users_df['UserID'].values:
+                if user_id in st.session_state.assistant.users_df['User ID'].values:
                     st.session_state.user_id = user_id
                     st.session_state.logged_in = True
                     st.success(f"Welcome back, User {user_id}!")
