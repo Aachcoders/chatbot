@@ -20,6 +20,13 @@ load_dotenv()
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+def get_openai_api_key():
+    """Get OpenAI API key from environment variable or Streamlit secrets"""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key and hasattr(st.secrets, "OPENAI_API_KEY"):
+        api_key = st.secrets.OPENAI_API_KEY
+    return api_key
+    
 
 @dataclass
 class OrderInfo:
