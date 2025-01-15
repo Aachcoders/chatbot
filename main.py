@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import torch
@@ -77,7 +78,8 @@ class EcommerceAssistant:
                 no_repeat_ngram_size=2,
                 top_k=50,
                 top_p=0.95,
-                temperature=0.7
+                temperature=0.7,
+                do_sample=True
             )
             
             # Decode the response
@@ -186,7 +188,7 @@ def initialize_app():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
     if 'user_id' not in st.session_state:
-        st.session_state .user_id = None
+        st.session_state.user_id = None
     
     try:
         products_df = pd.read_csv("Updated_Products_Dataset.csv")
@@ -205,7 +207,7 @@ def initialize_app():
         st.error(f"Error initializing app: {str(e)}")
         return False
 
-async def main():
+def main():
     """Main application function"""
     if not initialize_app():
         return
@@ -221,7 +223,7 @@ async def main():
                     st.session_state.user_id = user_id
                     st.session_state.logged_in = True
                     st.success(f"Welcome back, User {user_id}!")
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error("Invalid User ID")
         else:
@@ -229,7 +231,7 @@ async def main():
             if st.button("Logout"):
                 st.session_state.user_id = None
                 st.session_state.logged_in = False
-                st.rerun()
+                st.experimental_rerun()
     
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -241,7 +243,7 @@ async def main():
             st.write(prompt)
         
         with st.chat_message("assistant"):
-            response = await st.session_state.assistant.process_message(
+            response = st.session_state.assistant.process_message(
                 prompt,
                 st.session_state.user_id if st.session_state.logged_in else None
             )
@@ -249,5 +251,4 @@ async def main():
             st.session_state.messages.append({"role": "assistant", "content": response})
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
