@@ -1,234 +1,228 @@
 import streamlit as st
 import pandas as pd
-import torch
-from transformers import GPT2Tokenizer, GPT2Model
 import numpy as np
+import torch
+from transformers import GPT2Tokenizer, GPT2Model, GPT2LMHeadModel
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import uuid
+import re
+from dataclasses import dataclass, field
 
-# Configure logging
+# Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize GPT-2 Tokenizer and Model
-tokenizer = GPT2Tokenizer.from_pretrained('gpt2-large')
-model = GPT2Model.from_pretrained('gpt2-large')
+# Load Datasets
+try:
+    PRODUCTS_DF = pd.read_csv('Updated_Products_Dataset.csv')
+    ORDERS_DF = pd.read_csv('Orders_Dataset.csv')
+    USERS_DF = pd.read_csv('Users_Dataset.csv')
+except Exception as e:
+    logger.error(f"Error loading datasets: {e}")
+    PRODUCTS_DF = pd.DataFrame()
+    ORDERS_DF = pd.DataFrame()
+    USERS_DF = pd.DataFrame()
 
-# Ensure padding token
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
+# Initialize GPT-2 Models
+tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+model = GPT2Model.from_pretrained('gpt2')
 
-class TextEmbeddingGenerator:
+class DataProcessor:
     @staticmethod
-    def generate_embedding(text: str) -> torch.Tensor:
-        """
-        Generate embedding for given text using GPT-2
-        
-        Args:
-            text (str): Input text to embed
-        
-        Returns:
-            torch.Tensor: Text embedding
-        """
+    def clean_and_validate(text: str, max_length: int = 500) -> str:
+        """Sanitize input text"""
         try:
-            # Tokenize input
-            inputs = tokenizer(
-                text, 
-                return_tensors='pt', 
-                truncation=True, 
-                max_length=512,
-                padding=True
-            )
-            
-            # Generate embedding
-            with torch.no_grad():
-                outputs = model(**inputs)
-                
-            # Use the last hidden state as embedding
-            embedding = outputs.last_hidden_state.mean(dim=1)
-            return embedding.squeeze()
-        
+            # Remove potentially harmful characters
+            cleaned_text = re.sub(r'[<>]', '', str(text))
+            # Truncate if too long
+            return cleaned_text[:max_length]
         except Exception as e:
-            logger.error(f"Embedding generation error: {e}")
-            return torch.zeros(model.config.hidden_size)
-
-class Product:
-    def __init__(
-        self, 
-        product_id: str, 
-        name: str, 
-        price: float, 
-        description: str
-    ):
-        self.product_id = product_id
-        self.name = name
-        self.price = price
-        self.description = description
-        self.embedding = self._generate_embedding()
-    
-    def _generate_embedding(self) -> torch.Tensor:
-        """Generate embedding for product"""
-        return TextEmbeddingGenerator.generate_embedding(
-            f"{self.name} {self.description}"
-        )
+            logger.error(f"Text cleaning error: {e}")
+            return ""
 
 class ProductSearchEngine:
-    def __init__(self, products: List[Product]):
-        self.products = products
+    def __init__(self, products_df: pd.DataFrame):
+        self.products_df = products_df
     
-    def semantic_search(self, query: str, top_k: int = 5) -> List[Product]:
-        """
-        Perform semantic search using embedding similarity
-        
-        Args:
-            query (str): Search query
-            top_k (int): Number of top results to return
-        
-        Returns:
-            List[Product]: Top matching products
-        """
+    def search_products(self, query: str, top_k: int = 5) -> pd.DataFrame:
+        """Advanced product search"""
         try:
-            # Generate query embedding
-            query_embedding = TextEmbeddingGenerator.generate_embedding(query)
+            # Convert query to lowercase
+            query = query.lower()
             
-            # Calculate similarities
-            similarities = []
-            for product in self.products:
-                similarity = torch.nn.functional.cosine_similarity(
-                    query_embedding.unsqueeze(0), 
-                    product.embedding.unsqueeze(0)
-                ).item()
+            # Create search scoring mechanism
+            def calculate_score(row):
+                score = 0
+                name = str(row['ProductName']).lower()
+                description = str(row.get('Description', '')).lower()
                 
-                similarities.append((product, similarity))
+                # Scoring logic
+                if query in name:
+                    score += 3
+                if query in description:
+                    score += 2
+                
+                return score
             
-            # Sort and return top k products
-            return [
-                product for product, _ in 
-                sorted(similarities, key=lambda x: x[1], reverse=True)[:top_k]
+            # Apply scoring
+            search_results = self.products_df.copy()
+            search_results['search_score'] = search_results.apply(calculate_score, axis=1)
+            
+            # Return top k results
+            return search_results.nlargest(top_k, 'search_score')[
+                ['ProductID', 'ProductName', 'Price', 'Description']
             ]
         
         except Exception as e:
-            logger.error(f"Semantic search error: {e}")
-            return []
+            logger.error(f"Product search error: {e}")
+            return pd.DataFrame()
 
-class EcommerceAssistant:
-    def __init__(self, products_df: pd.DataFrame):
-        """
-        Initialize assistant with product data
-        
-        Args:
-            products_df (pd.DataFrame): DataFrame of products
-        """
-        # Convert DataFrame to Product objects
-        self.products = [
-            Product(
-                product_id=str(row['ProductID']),
-                name=row['ProductName'],
-                price=float(row['Price']),
-                description=row.get('Description', '')
-            ) for _, row in products_df.iterrows()
-        ]
-        
-        # Initialize search engine
-        self.search_engine = ProductSearchEngine(self.products)
+class OrderAnalyzer:
+    def __init__(self, orders_df: pd.DataFrame):
+        self.orders_df = orders_df
     
-    def process_query(self, query: str) -> Dict[str, Any]:
-        """
-        Process user query and generate response
-        
-        Args:
-            query (str): User input query
-        
-        Returns:
-            Dict: Response with search results
-        """
+    def get_user_order_history(self, user_id: str) -> pd.DataFrame:
+        """Retrieve user's order history"""
         try:
-            # Perform semantic search
-            search_results = self.search_engine.semantic_search(query)
+            return self.orders_df[self.orders_df['UserID'] == user_id]
+        except Exception as e:
+            logger.error(f"Order history retrieval error: {e}")
+            return pd.DataFrame()
+    
+    def get_recent_order_status(self, user_id: str) -> Dict[str, Any]:
+        """Get the most recent order status for a user"""
+        try:
+            user_orders = self.get_user_order_history(user_id)
+            if user_orders.empty:
+                return {"status": "No recent orders"}
             
-            # Generate response using GPT-2
-            response = self._generate_response(query, search_results)
-            
+            # Get most recent order
+            recent_order = user_orders.iloc[-1]
             return {
-                'search_results': [
-                    {
-                        'product_id': p.product_id,
-                        'name': p.name,
-                        'price': p.price,
-                        'description': p.description
-                    } for p in search_results
-                ],
-                'response': response
+                "order_id": recent_order['OrderID'],
+                "product": recent_order['ProductName'],
+                "status": recent_order['Status'],
+                "order_date": recent_order['OrderDate'],
+                "delivery_date": recent_order['DeliveryDate']
             }
+        except Exception as e:
+            logger.error(f"Recent order status error: {e}")
+            return {"status": "Error retrieving order status"}
+
+class UserProfileAnalyzer:
+    def __init__(self, users_df: pd.DataFrame):
+        self.users_df = users_df
+    
+    def get_user_details(self, user_id: str) -> Dict[str, Any]:
+        """Retrieve user details"""
+        try:
+            user = self.users_df[self.users_df['UserID'] == user_id]
+            if user.empty:
+                return {"error": "User not found"}
+            
+            return user.iloc[0].to_dict()
+        except Exception as e:
+            logger.error(f"User details retrieval error: {e}")
+            return {"error": "Error retrieving user details"}
+
+class RecommendationEngine:
+    def __init__(self, products_df: pd.DataFrame, orders_df: pd.DataFrame):
+        self.products_df = products_df
+        self.orders_df = orders_df
+    
+    def generate_recommendations(self, user_id: str, top_k: int = 5) -> pd.DataFrame:
+        """Generate personalized product recommendations"""
+        try:
+            # Get user's previous purchases
+            user_orders = self.orders_df[self.orders_df['UserID'] == user_id]
+            purchased_products = user_orders['ProductID'].unique()
+            
+            # Recommend products not previously purchased
+            recommendations = self.products_df[
+                ~self.products_df['ProductID'].isin(purchased_products)
+            ]
+            
+            # Add some randomization and relevance
+            return recommendations.sample(n=min(top_k, len(recommendations)))
+        
+        except Exception as e:
+            logger.error(f"Recommendation generation error: {e}")
+            return pd.DataFrame()
+
+class AIAssistant:
+    def __init__(
+        self, 
+        products_df: pd.DataFrame, 
+        orders_df: pd.DataFrame, 
+        users_df: pd.DataFrame
+    ):
+        self.products_search = ProductSearchEngine(products_df)
+        self.order_analyzer = OrderAnalyzer(orders_df)
+        self.user_analyzer = UserProfileAnalyzer(users_df)
+        self.recommendation_engine = RecommendationEngine(products_df, orders_df)
+    
+    def process_query(self, query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Process user query and generate contextual response"""
+        try:
+            # Normalize query
+            query = query.lower()
+            
+            # Handle different query types
+            if any(keyword in query for keyword in ['search', 'find', 'looking for']):
+                # Product search
+                search_results = self.products_search.search_products(query)
+                return {
+                    'type': 'product_search',
+                    'results': search_results.to_dict(orient='records'),
+                    'response': f"I found {len(search_results)} matching products."
+                }
+            
+            elif user_id and any(keyword in query for keyword in ['order', 'status', 'track']):
+                # Order status
+                order_status = self.order_analyzer.get_recent_order_status(user_id)
+                return {
+                    'type': 'order_status',
+                    'details': order_status,
+                    'response': f"Your latest order status: {order_status.get('status', 'Unknown')}"
+                }
+            
+            elif user_id and any(keyword in query for keyword in ['recommend', 'suggest']):
+                # Personalized recommendations
+                recommendations = self.recommendation_engine.generate_recommendations(user_id)
+                return {
+                    'type': 'recommendations',
+                    'results': recommendations.to_dict(orient='records'),
+                    'response': f"Here are {len(recommendations)} personalized recommendations."
+                }
+            
+            else:
+                # General query fallback
+                return {
+                    'type': 'general',
+                    'response': "I'm here to assist you! Please specify if you're looking for products, order status, or recommendations."
+                }
         
         except Exception as e:
             logger.error(f"Query processing error: {e}")
             return {'error': str(e)}
-    
-    def _generate_response(
-        self, 
-        query: str, 
-        products: List[Product]
-    ) -> str:
-        """
-        Generate a contextual response based on query and products
-        
-        Args:
-            query (str): User's original query
-            products (List[Product]): Matched products
-        
-        Returns:
-            str: Generated response
-        """
-        try:
-            # Prepare context
-            product_context = "\n".join([
-                f"{p.name} - ${p.price:.2f}: {p.description}" 
-                for p in products
-            ])
-            
-            # Construct prompt
-            prompt = (
-                f"User Query: {query}\n"
-                f"Matching Products:\n{product_context}\n"
-                "Generate a helpful and engaging response:"
-            )
-            
-            # Tokenize input
-            input_ids = tokenizer.encode(prompt, return_tensors='pt')
-            
-            # Generate response
-            output = model.generate(
-                input_ids, 
-                max_length=200,
-                num_return_sequences=1,
-                temperature=0.7,
-                top_k=50,
-                top_p=0.95
-            )
-            
-            # Decode response
-            response = tokenizer.decode(output[0], skip_special_tokens=True)
-            return response
-        
-        except Exception as e:
-            logger.error(f"Response generation error: {e}")
-            return "I'm sorry, I couldn't generate a response."
 
+# Streamlit Application
 def main():
     """Streamlit main application"""
-    st.title("🤖 AI Product Assistant")
+    st.title("🤖 E-commerce AI Assistant")
     
-    # Load products data
+    # Load datasets
     try:
         products_df = pd.read_csv('Updated_Products_Dataset.csv')
+        orders_df = pd.read_csv('Orders_Dataset.csv')
+        users_df = pd.read_csv('Users_Dataset.csv')
     except Exception as e:
-        st.error(f"Error loading products: {e}")
+        st.error(f"Error loading datasets: {e}")
         return
     
-    # Initialize assistant
-    assistant = EcommerceAssistant(products_df)
+    # Initialize AI Assistant
+    assistant = AIAssistant(products_df, orders_df, users_df)
     
     # Initialize session state
     if 'messages' not in st.session_state:
@@ -240,7 +234,7 @@ def main():
             st.markdown(message["content"])
     
     # User input
-    if prompt := st.chat_input("What product are you looking for?"):
+    if prompt := st.chat_input("What can I help you with?"):
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
@@ -251,14 +245,33 @@ def main():
         # Process query and generate response
         with st.chat_message("assistant"):
             try:
+                # Create a mock user for demonstration
+                mock_user_id = "U001"  # Example user ID
+                
                 # Process query
-                result = assistant.process_query(prompt)
+                result = assistant.process_query(prompt, mock_user_id)
                 
-                # Display search results
-                if 'search_results' in result:
-                    st.write("Recommended Products:")
-                    for product in result['search_results'][:3]:
-                        st.write(f"- {product['name']} (${product['price']:.2f})")
+                # Display response based on query type
+                if result['type'] == 'product_search':
+                    st.write("Matching Products:")
+                    for product in result['results']:
+                        st.write(f"- {product['ProductName']} (${product['Price']:.2f}): {product['Description']}")
                 
-                # Display AI-generated response
-                if 'response' in result: st.markdown(result['response'])
+                elif result['type'] == 'order_status':
+                    order_details = result['details']
+                    st.write(f"Order ID: {order_details['order_id']}, Status: {order_details['status']}, Delivery Date: {order_details['delivery_date']}")
+                
+                elif result['type'] == 'recommendations':
+                    st.write("Personalized Recommendations:")
+                    for product in result['results']:
+                        st.write(f"- {product['ProductName']} (${product['Price']:.2f})")
+                
+                else:
+                    st.markdown(result['response'])
+            
+            except Exception as e:
+                logger.error(f"Error during response generation: {e}")
+                st.markdown("I'm sorry, there was an error processing your request.")
+
+if __name__ == "__main__":
+    main()
